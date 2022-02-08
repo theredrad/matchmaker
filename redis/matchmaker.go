@@ -115,21 +115,25 @@ func (m *Matchmaker) GetScore(ctx context.Context, id string, rank int, latency 
 
 // PushToQueue pushes a player to the queue
 func (m *Matchmaker) PushToQueue(ctx context.Context, id string, rank int, latency uint) error {
-	m.pushPlayerToQueue(ctx, &Player{
+	return m.pushPlayerToQueue(ctx, &Player{
 		id,
 		rank,
 		latency,
 	})
-	return nil
 }
 
-func (m *Matchmaker) pushPlayerToQueue(ctx context.Context, player *Player) {
+func (m *Matchmaker) pushPlayerToQueue(ctx context.Context, player *Player) error {
 	score := float64(time.Now().UnixNano())
-	m.client.ZAdd(ctx, fmt.Sprintf(queueRankLatencyKeyFmt, m.opts.Prefix, player.Rank, player.Latency), &redis.Z{
+	res := m.client.ZAdd(ctx, fmt.Sprintf(queueRankLatencyKeyFmt, m.opts.Prefix, player.Rank, player.Latency), &redis.Z{
 		score,
 		player.ID,
 	})
+	_, err := res.Result()
+	if err != nil {
+		return err
+	}
 	go m.match(ctx, player.Rank, player.Latency)
+	return nil
 }
 
 // match locks the queue, query the queue size, if the size is greater than MaxPlayer, pop the players & calls the HandlerFunc, then release the lock
